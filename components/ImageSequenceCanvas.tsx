@@ -9,6 +9,11 @@ interface ImageSequenceCanvasProps {
   height: number;
 }
 
+interface CanvasSize {
+  width: number;
+  height: number;
+}
+
 const getCurrentFrame = (index: number): string => {
   return `/Frames/${index.toString().padStart(4, '0')}.png`;
 };
@@ -22,6 +27,28 @@ const ImageSequenceCanvas: React.FC<ImageSequenceCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<HTMLImageElement[]>([]);
   const [frameIndex, setFrameIndex] = useState<number>(0);
+  const [canvasSize, setCanvasSize] = useState<CanvasSize>({ width: 0, height: 0 });
+
+  // Calculate responsive canvas size
+  const updateCanvasSize = () => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const aspectRatio = width / height;
+    
+    let newWidth = viewportWidth;
+    let newHeight = viewportWidth / aspectRatio;
+    
+    // If height is too tall, scale based on height instead
+    if (newHeight > viewportHeight) {
+      newHeight = viewportHeight;
+      newWidth = viewportHeight * aspectRatio;
+    }
+    
+    setCanvasSize({
+      width: newWidth,
+      height: newHeight
+    });
+  };
 
   // Preload images
   const preloadImages = () => {
@@ -48,18 +75,28 @@ const ImageSequenceCanvas: React.FC<ImageSequenceCanvasProps> = ({
     if (!canvasRef.current) return;
     const context = canvasRef.current.getContext('2d');
     if (context) {
-      context.canvas.width = width;
-      context.canvas.height = height;
+      context.canvas.width = canvasSize.width;
+      context.canvas.height = canvasSize.height;
     }
   };
 
   // Initialize component
   useEffect(() => {
     preloadImages();
-    renderCanvas();
+    updateCanvasSize();
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('resize', updateCanvasSize);
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', updateCanvasSize);
+    };
   }, []);
+
+  // Update canvas size when container size changes
+  useEffect(() => {
+    renderCanvas();
+  }, [canvasSize]);
 
   // Render images to canvas
   useEffect(() => {
@@ -71,22 +108,28 @@ const ImageSequenceCanvas: React.FC<ImageSequenceCanvasProps> = ({
     let requestId: number;
     const render = () => {
       if (images[frameIndex]) {
-        context.clearRect(0, 0, width, height);
-        context.drawImage(images[frameIndex], 0, 0, width, height);
+        context.clearRect(0, 0, canvasSize.width, canvasSize.height);
+        context.drawImage(images[frameIndex], 0, 0, canvasSize.width, canvasSize.height);
       }
       requestId = requestAnimationFrame(render);
     };
 
     render();
     return () => cancelAnimationFrame(requestId);
-  }, [frameIndex, images, width, height]);
+  }, [frameIndex, images, canvasSize]);
 
   return (
     <div style={{ height: `${scrollHeight}px` }} className="relative">
-      <canvas
-        ref={canvasRef}
-        className="fixed top-0 left-0 transform w-full h-full"
-      />
+      <div className="fixed inset-0 flex items-center justify-center bg-black">
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full object-cover"
+          style={{
+            width: `${canvasSize.width}px`,
+            height: `${canvasSize.height}px`
+          }}
+        />
+      </div>
     </div>
   );
 };
